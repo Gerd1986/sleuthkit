@@ -18,7 +18,6 @@ static uint8_t qnx6_fsstat(TSK_FS_INFO *fs, FILE *out) {
     tsk_fprintf(out, "NOTE: File and directory traversal not implemented in TSK.\\n");
     return 0;
 }
-
 TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
                        TSK_FS_TYPE_ENUM type, const char *password,
                        uint8_t test) {
