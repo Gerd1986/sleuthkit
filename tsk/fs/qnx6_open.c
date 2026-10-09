@@ -5,6 +5,7 @@
 #include "tsk_fs_i.h"
 #include "qnx6_probe.h"
 #include "qnx6_inode.h"
+#include "qnx6_bitmap.h"
 #include <limits.h>
 #include <stdint.h>
 
@@ -34,6 +35,7 @@ typedef struct {
     TSK_FS_INFO fs;
     QNX6_READ_CONTEXT io;
     TSK_QNX6_ROOT inode_tree;
+    TSK_QNX6_ROOT bitmap_tree;
 } QNX6_FS_INFO;
 
 static uint8_t qnx6_file_add_meta(TSK_FS_INFO *fs, TSK_FS_FILE *file,
@@ -202,6 +204,7 @@ TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
     QNX6_FS_INFO *qfs;
     TSK_OFF_T sb_offset;
     TSK_QNX6_ROOT inode_tree;
+    TSK_QNX6_ROOT bitmap_tree;
     TSK_QNX6_INODE root_inode;
     QNX6_READ_CONTEXT ctx;
     (void)password;
@@ -223,7 +226,8 @@ TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
     }
     /* Validate the inode tree and root directory before accepting the image.
      * This is still not a complete TSK inode/dir driver. */
-    if (!tsk_qnx6_parse_root(sb,sizeof(sb),72,&inode_tree)) {
+    if (!tsk_qnx6_parse_root(sb,sizeof(sb),72,&inode_tree) ||
+        !tsk_qnx6_parse_root(sb,sizeof(sb),152,&bitmap_tree)) {
         tsk_error_set_errno(TSK_ERR_FS_MAGIC);
         tsk_error_set_errstr("qnx6_open: invalid inode-tree root");
         return NULL;
@@ -244,6 +248,7 @@ TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
     qfs=(QNX6_FS_INFO *)fs;
     qfs->io=ctx;
     qfs->inode_tree=inode_tree;
+    qfs->bitmap_tree=bitmap_tree;
     fs->img_info = img;
     fs->offset = offset;
     fs->ftype = TSK_FS_TYPE_QNX6;
