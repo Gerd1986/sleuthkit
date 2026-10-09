@@ -67,7 +67,7 @@ jobs:
         run: |
           $env:TSK_HOME = (Get-Location).Path
           $env:INCLUDE = "$env:INCLUDE;$env:JAVA_HOME\\include;$env:JAVA_HOME\\include\\win32"
-          python win32/updateAndBuildAll.py -m -x
+          python win32/updateAndBuildAll.py -m
       - name: Package Windows executables and JNI
         shell: pwsh
         run: |
