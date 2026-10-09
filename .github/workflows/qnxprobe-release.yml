@@ -66,7 +66,9 @@ jobs:
         shell: pwsh
         run: |
           $env:TSK_HOME = (Get-Location).Path
-          $env:INCLUDE = "$env:INCLUDE;$env:JAVA_HOME\\include;$env:JAVA_HOME\\include\\win32"
+          $env:INCLUDE = "$env:INCLUDE;$env:JAVA_HOME/include;$env:JAVA_HOME/include/win32"
+          if (-not (Test-Path "$env:JAVA_HOME/include/jni.h")) { throw "Missing JDK JNI header" }
+          Write-Host "JNI header found: $env:JAVA_HOME/include/jni.h"
           python win32/updateAndBuildAll.py -m
       - name: Package Windows executables and JNI
         shell: pwsh
