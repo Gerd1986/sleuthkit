@@ -2,10 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Strict read semantics: a missing pointer represents a sparse hole;
- * an I/O failure on a mapped block is an error, never silent zero-fill.
- * The caller must ensure the image read callback rejects out-of-image reads.
- */
+/* Fail-closed forensic reads: until sparse-hole and corruption status can be
+ * distinguished, an unmapped logical block is an error, never fabricated
+ * zero data. */
 int tsk_qnx6_read_file(const TSK_QNX6_PROBE_INFO *sb,
                        const TSK_QNX6_INODE *inode, uint64_t offset,
                        uint8_t *destination, size_t capacity,
@@ -38,9 +37,8 @@ int tsk_qnx6_read_file(const TSK_QNX6_PROBE_INFO *sb,
             }
             memcpy(destination+done,block+within,take);
         } else {
-            /* TODO: distinguish corrupt pointers from legitimate sparse holes
-             * before exposing this through TSK forensic APIs. */
-            memset(destination+done,0,take);
+            free(block);
+            return 0;
         }
         done+=take;
     }
