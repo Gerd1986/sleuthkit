@@ -12,7 +12,7 @@ static uint8_t qnx6_fsstat(TSK_FS_INFO *fs, FILE *out) {
     tsk_fprintf(out, "--------------------------------------------\\n");
     tsk_fprintf(out, "File System Type: QNX6 (experimental)\\n");
     tsk_fprintf(out, "Root Inode: %llu\\n", (unsigned long long)fs->root_inum);
-    tsk_fprintf(out, "Inode Count: %" PRIuINUM "\\n", (unsigned long long)fs->inum_count);
+    tsk_fprintf(out, "Inode Count: %llu\\n", (unsigned long long)fs->inum_count);
     tsk_fprintf(out, "Block Size: %u\\n", fs->block_size);
     tsk_fprintf(out, "Block Count: %llu\\n", (unsigned long long)fs->block_count);
     tsk_fprintf(out, "NOTE: File and directory traversal not implemented in TSK.\\n");
