@@ -18,6 +18,8 @@ jobs:
         run: |
           cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -I tsk/fs tests/qnx6_probe_smoke.c tsk/fs/qnx6_probe.c -o qnx6_probe_test
           ./qnx6_probe_test
+          cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer tests/qnx6_file_smoke.c tsk/fs/qnx6_file.c tsk/fs/qnx6_map.c -o qnx6_file_test
+          ./qnx6_file_test
           cc -std=c11 -Wall -Wextra -Werror -c tsk/fs/qnx6_map.c -o qnx6_map.o
           cc -std=c11 -Wall -Wextra -Werror -c tsk/fs/qnx6_inode.c -o qnx6_inode.o
           cc -std=c11 -Wall -Wextra -Werror -c tsk/fs/qnx6_file.c -o qnx6_file.o
@@ -28,4 +30,6 @@ jobs:
           call "%ProgramFiles%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /W4 /I tsk\fs tests\qnx6_probe_smoke.c tsk\fs\qnx6_probe.c /Fe:qnx6_probe_test.exe
           qnx6_probe_test.exe
+          cl /nologo /W4 /I tsk\\fs tests\\qnx6_file_smoke.c tsk\\fs\\qnx6_file.c tsk\\fs\\qnx6_map.c /Fe:qnx6_file_test.exe
+          qnx6_file_test.exe
           cl /nologo /W4 /c tsk\fs\qnx6_map.c tsk\fs\qnx6_inode.c tsk\fs\qnx6_file.c
