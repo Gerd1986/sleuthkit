@@ -33,7 +33,7 @@ int tsk_qnx6_map_block(const TSK_QNX6_PROBE_INFO *sb,
     index=logical_block/span;
     if (index>=16 || root->ptr[index]==0 || root->ptr[index]==UINT32_MAX) return 0;
     /* QNX6 data blocks follow the 0x2000 boot and 0x1000 superblock areas. */
-    base=0x3000/sb->block_size;
+    base=(0x2000U/sb->block_size)+(0x1000U/sb->block_size);
     blk=(uint64_t)root->ptr[index]+base;
     if (blk >= (uint64_t)sb->block_count+base) return 0;
     if (!root->levels) { *physical_block=blk; return 1; }
