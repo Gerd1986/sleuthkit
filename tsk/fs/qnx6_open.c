@@ -127,6 +127,60 @@ static TSK_RETVAL_ENUM qnx6_dir_open_meta(TSK_FS_INFO *fs,
     return TSK_OK;
 }
 
+static uint8_t qnx6_load_attrs(TSK_FS_FILE *file) {
+    TSK_FS_META *meta;
+    QNX6_FS_INFO *qfs;
+    TSK_QNX6_INODE inode;
+    TSK_FS_ATTR *attr;
+    TSK_FS_ATTR_RUN *first=NULL, *last=NULL, *run;
+    uint64_t logical, blocks, physical;
+    if (!file || !file->fs_info || !file->meta) return 1;
+    meta=file->meta;
+    qfs=(QNX6_FS_INFO *)file->fs_info;
+    if (meta->attr_state==TSK_FS_META_ATTR_STUDIED) return 0;
+    if (!tsk_qnx6_read_inode(&qfs->io.probe,&qfs->inode_tree,
+                            (uint32_t)meta->addr,qnx6_read_block,&qfs->io,&inode))
+        goto error;
+    if (!meta->attr) {
+        meta->attr=tsk_fs_attrlist_alloc();
+        if (!meta->attr) goto error;
+    }
+    attr=tsk_fs_attrlist_getnew(meta->attr,TSK_FS_ATTR_NONRES);
+    if (!attr) goto error;
+    blocks=inode.size/qfs->io.probe.block_size+
+           (inode.size%qfs->io.probe.block_size!=0);
+    if (blocks>qfs->io.probe.block_count) goto error;
+    for (logical=0;logical<blocks;logical++) {
+        if (!tsk_qnx6_map_block(&qfs->io.probe,&inode.data,logical,
+                               qnx6_read_block,&qfs->io,&physical)) goto error;
+        if (last && last->addr+last->len==physical) {
+            last->len++;
+            continue;
+        }
+        run=tsk_fs_attr_run_alloc();
+        if (!run) goto error;
+        run->offset=logical;
+        run->addr=physical;
+        run->len=1;
+        if (last) last->next=run;
+        else first=run;
+        last=run;
+    }
+    if (tsk_fs_attr_set_run(file,attr,first,NULL,TSK_FS_ATTR_TYPE_DEFAULT,
+                            TSK_FS_ATTR_ID_DEFAULT,(TSK_OFF_T)inode.size,
+                            (TSK_OFF_T)inode.size,
+                            (TSK_OFF_T)(blocks*qfs->io.probe.block_size),
+                            TSK_FS_ATTR_FLAG_NONE,0)) goto error;
+    meta->attr_state=TSK_FS_META_ATTR_STUDIED;
+    return 0;
+error:
+    meta->attr_state=TSK_FS_META_ATTR_ERROR;
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_FS_READ);
+    tsk_error_set_errstr("qnx6_load_attrs: cannot map file data blocks");
+    return 1;
+}
+
 static uint8_t qnx6_fsstat(TSK_FS_INFO *fs, FILE *out) {
     if (!fs || !out) return 1;
     tsk_fprintf(out, "FILE SYSTEM INFORMATION\\n");
@@ -212,7 +266,7 @@ TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
     fs->file_add_meta = qnx6_file_add_meta;
     fs->istat = tsk_fs_nofs_istat;
     fs->get_default_attr_type = tsk_fs_nofs_get_default_attr_type;
-    fs->load_attrs = tsk_fs_nofs_make_data_run;
+    fs->load_attrs = qnx6_load_attrs;
     fs->dir_open_meta = qnx6_dir_open_meta;
     fs->name_cmp = tsk_fs_nofs_name_cmp;
     fs->jblk_walk = tsk_fs_nofs_jblk_walk;
