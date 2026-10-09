@@ -5,7 +5,7 @@ noinst_LTLIBRARIES = libtskfs.la
 # Note that the .h files are in the top-level Makefile
 libtskfs_la_SOURCES  = tsk_fs_i.h fs_inode.c fs_io.c fs_block.c fs_open.c \
     fs_name.c fs_dir.c fs_types.c fs_attr.c fs_attrlist.c fs_load.c \
-    fs_parse.c fs_file.c qnx6_probe.c qnx6_probe.h qnx6_map.c qnx6_map.h \
+    fs_parse.c fs_file.c qnx6_probe.c qnx6_probe.h qnx6_map.c qnx6_map.h qnx6_inode.c qnx6_inode.h \
     unix_misc.c nofs_misc.c \
     ffs.c ffs_dent.c ext2fs.c ext2fs_dent.c ext2fs_journal.c \
     fatfs.c fatfs_meta.c fatfs_dent.cpp \
