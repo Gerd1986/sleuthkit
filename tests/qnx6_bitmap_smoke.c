@@ -5,7 +5,7 @@
 typedef struct { uint8_t bitmap[512]; } Fixture;
 static int read_block(void *opaque,uint64_t physical,uint8_t *dest,size_t len) {
     Fixture *f=(Fixture *)opaque;
-    if (physical!=7 || len!=512) return 0;
+    if (physical!=25 || len!=512) return 0;
     memcpy(dest,f->bitmap,512);
     return 1;
 }
@@ -19,7 +19,7 @@ int main(void) {
     memset(&fixture,0,sizeof(fixture));
     sb.block_size=512;
     sb.block_count=4096;
-    tree.ptr[0]=1; /* mapper adds six filesystem header blocks */
+    tree.ptr[0]=1; /* mapper adds 24 filesystem header blocks at 512-byte sectors */
     fixture.bitmap[0]=0x81;
     fixture.bitmap[1]=0x02;
     assert(tsk_qnx6_bitmap_raw_bit(&sb,&tree,0,read_block,&fixture,&bit) && bit==1);
