@@ -6,6 +6,19 @@
 #include "qnx6_probe.h"
 #include <stdint.h>
 
+static uint8_t qnx6_fsstat(TSK_FS_INFO *fs, FILE *out) {
+    if (!fs || !out) return 1;
+    tsk_fprintf(out, "FILE SYSTEM INFORMATION\\n");
+    tsk_fprintf(out, "--------------------------------------------\\n");
+    tsk_fprintf(out, "File System Type: QNX6 (experimental)\\n");
+    tsk_fprintf(out, "Root Inode: %" PRIuINUM "\\n", fs->root_inum);
+    tsk_fprintf(out, "Inode Count: %" PRIuINUM "\\n", fs->inum_count);
+    tsk_fprintf(out, "Block Size: %u\\n", fs->block_size);
+    tsk_fprintf(out, "Block Count: %" PRIuDADDR "\\n", fs->block_count);
+    tsk_fprintf(out, "NOTE: File and directory traversal not implemented in TSK.\\n");
+    return 0;
+}
+
 TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
                        TSK_FS_TYPE_ENUM type, const char *password,
                        uint8_t test) {
@@ -47,7 +60,7 @@ TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
     fs->last_inum = probe.inode_count;
     fs->inum_count = probe.inode_count;
     fs->close = tsk_fs_nofs_close;
-    fs->fsstat = tsk_fs_nofs_fsstat;
+    fs->fsstat = qnx6_fsstat;
     fs->block_walk = tsk_fs_nofs_block_walk;
     fs->block_getflags = tsk_fs_nofs_block_getflags;
     fs->inode_walk = tsk_fs_nofs_inode_walk;
