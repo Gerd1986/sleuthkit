@@ -183,6 +183,42 @@ error:
     return 1;
 }
 
+/* Block classification is deliberately conservative until bitmap polarity
+ * and the data-block origin have been validated against a reference image.
+ * Never advertise unknown bytes as unallocated evidence. */
+static TSK_FS_BLOCK_FLAG_ENUM qnx6_block_getflags(TSK_FS_INFO *fs,
+                                                    TSK_DADDR_T addr) {
+    if (!fs || addr<fs->first_block || addr>fs->last_block) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_BLK_NUM);
+        tsk_error_set_errstr("qnx6_block_getflags: block outside filesystem");
+        return TSK_FS_BLOCK_FLAG_UNUSED;
+    }
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_FS_UNSUPFUNC);
+    tsk_error_set_errstr("qnx6_block_getflags: bitmap allocation polarity unverified");
+    return TSK_FS_BLOCK_FLAG_UNUSED;
+}
+
+static uint8_t qnx6_block_walk(TSK_FS_INFO *fs, TSK_DADDR_T start,
+                                TSK_DADDR_T end,
+                                TSK_FS_BLOCK_WALK_FLAG_ENUM flags,
+                                TSK_FS_BLOCK_WALK_CB callback, void *opaque) {
+    (void)flags;
+    (void)callback;
+    (void)opaque;
+    if (!fs || start<fs->first_block || end>fs->last_block || start>end) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_BLK_NUM);
+        tsk_error_set_errstr("qnx6_block_walk: invalid block range");
+        return 1;
+    }
+    tsk_error_reset();
+    tsk_error_set_errno(TSK_ERR_FS_UNSUPFUNC);
+    tsk_error_set_errstr("qnx6_block_walk: allocation map requires reference validation");
+    return 1;
+}
+
 static uint8_t qnx6_fsstat(TSK_FS_INFO *fs, FILE *out) {
     if (!fs || !out) return 1;
     tsk_fprintf(out, "FILE SYSTEM INFORMATION\\n");
@@ -265,8 +301,8 @@ TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
     fs->inum_count = probe.inode_count;
     fs->close = tsk_fs_nofs_close;
     fs->fsstat = qnx6_fsstat;
-    fs->block_walk = tsk_fs_nofs_block_walk;
-    fs->block_getflags = tsk_fs_nofs_block_getflags;
+    fs->block_walk = qnx6_block_walk;
+    fs->block_getflags = qnx6_block_getflags;
     fs->inode_walk = tsk_fs_nofs_inode_walk;
     fs->file_add_meta = qnx6_file_add_meta;
     fs->istat = tsk_fs_nofs_istat;
