@@ -4,7 +4,31 @@
  */
 #include "tsk_fs_i.h"
 #include "qnx6_probe.h"
+#include "qnx6_inode.h"
+#include <limits.h>
 #include <stdint.h>
+
+typedef struct {
+    TSK_IMG_INFO *image;
+    TSK_OFF_T fs_offset;
+    TSK_QNX6_PROBE_INFO probe;
+} QNX6_READ_CONTEXT;
+
+static int qnx6_read_block(void *opaque, uint64_t block,
+                           uint8_t *dst, size_t length) {
+    QNX6_READ_CONTEXT *ctx=(QNX6_READ_CONTEXT *)opaque;
+    uint64_t image_offset;
+    if (!ctx || !dst || length!=ctx->probe.block_size ||
+        block > UINT64_MAX / length) return 0;
+    image_offset=block*length;
+    if ((uint64_t)ctx->fs_offset > UINT64_MAX-image_offset) return 0;
+    image_offset+=(uint64_t)ctx->fs_offset;
+    if (image_offset>(uint64_t)INT64_MAX ||
+        image_offset>(uint64_t)ctx->image->size ||
+        length>(uint64_t)ctx->image->size-image_offset) return 0;
+    return tsk_img_read(ctx->image,(TSK_OFF_T)image_offset,
+                        (char *)dst,length)==(ssize_t)length;
+}
 
 static uint8_t qnx6_fsstat(TSK_FS_INFO *fs, FILE *out) {
     if (!fs || !out) return 1;
@@ -25,6 +49,9 @@ TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
     TSK_QNX6_PROBE_INFO probe;
     TSK_FS_INFO *fs;
     TSK_OFF_T sb_offset;
+    TSK_QNX6_ROOT inode_tree;
+    TSK_QNX6_INODE root_inode;
+    QNX6_READ_CONTEXT ctx;
     (void)password;
     (void)test;
     tsk_error_reset();
@@ -40,6 +67,24 @@ TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_MAGIC);
         tsk_error_set_errstr("qnx6_open: no valid QNX6 superblock at 0x2000");
+        return NULL;
+    }
+    /* Validate the inode tree and root directory before accepting the image.
+     * This is still not a complete TSK inode/dir driver. */
+    if (!tsk_qnx6_parse_root(sb,sizeof(sb),72,&inode_tree)) {
+        tsk_error_set_errno(TSK_ERR_FS_MAGIC);
+        tsk_error_set_errstr("qnx6_open: invalid inode-tree root");
+        return NULL;
+    }
+    ctx.image=img;
+    ctx.fs_offset=offset;
+    ctx.probe=probe;
+    if (!tsk_qnx6_read_inode(&probe,&inode_tree,1,qnx6_read_block,&ctx,
+                             &root_inode) ||
+        (root_inode.mode & 0170000) != 0040000) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_MAGIC);
+        tsk_error_set_errstr("qnx6_open: root inode is not a readable directory");
         return NULL;
     }
     fs = tsk_fs_malloc(sizeof(TSK_FS_INFO));
