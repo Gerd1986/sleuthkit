@@ -30,6 +30,48 @@ static int qnx6_read_block(void *opaque, uint64_t block,
                         (char *)dst,length)==(ssize_t)length;
 }
 
+typedef struct {
+    TSK_FS_INFO fs;
+    QNX6_READ_CONTEXT io;
+    TSK_QNX6_ROOT inode_tree;
+} QNX6_FS_INFO;
+
+static uint8_t qnx6_file_add_meta(TSK_FS_INFO *fs, TSK_FS_FILE *file,
+                                   TSK_INUM_T addr) {
+    QNX6_FS_INFO *qfs=(QNX6_FS_INFO *)fs;
+    TSK_QNX6_INODE inode;
+    TSK_FS_META *meta;
+    uint16_t kind;
+    if (!file || addr<1 || addr>fs->last_inum ||
+        !tsk_qnx6_read_inode(&qfs->io.probe,&qfs->inode_tree,(uint32_t)addr,
+                            qnx6_read_block,&qfs->io,&inode)) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
+        tsk_error_set_errstr("qnx6_file_add_meta: invalid or unreadable inode");
+        return 1;
+    }
+    if (!file->meta) {
+        file->meta=tsk_fs_meta_alloc(0);
+        if (!file->meta) return 1;
+    }
+    meta=file->meta;
+    tsk_fs_meta_reset(meta);
+    kind=inode.mode & 0170000;
+    switch(kind) {
+    case 0040000: meta->type=TSK_FS_META_TYPE_DIR; break;
+    case 0100000: meta->type=TSK_FS_META_TYPE_REG; break;
+    case 0120000: meta->type=TSK_FS_META_TYPE_LNK; break;
+    default: meta->type=TSK_FS_META_TYPE_UNDEF; break;
+    }
+    meta->addr=addr;
+    meta->flags=(TSK_FS_META_FLAG_ENUM)(TSK_FS_META_FLAG_ALLOC|TSK_FS_META_FLAG_USED);
+    meta->mode=(TSK_FS_META_MODE_ENUM)(inode.mode & 07777);
+    meta->size=(TSK_OFF_T)inode.size;
+    meta->mtime=(time_t)inode.mtime;
+    meta->nlink=1;
+    return 0;
+}
+
 static uint8_t qnx6_fsstat(TSK_FS_INFO *fs, FILE *out) {
     if (!fs || !out) return 1;
     tsk_fprintf(out, "FILE SYSTEM INFORMATION\\n");
@@ -48,6 +90,7 @@ TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
     uint8_t sb[512];
     TSK_QNX6_PROBE_INFO probe;
     TSK_FS_INFO *fs;
+    QNX6_FS_INFO *qfs;
     TSK_OFF_T sb_offset;
     TSK_QNX6_ROOT inode_tree;
     TSK_QNX6_INODE root_inode;
@@ -87,8 +130,11 @@ TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
         tsk_error_set_errstr("qnx6_open: root inode is not a readable directory");
         return NULL;
     }
-    fs = tsk_fs_malloc(sizeof(TSK_FS_INFO));
+    fs = tsk_fs_malloc(sizeof(QNX6_FS_INFO));
     if (!fs) return NULL;
+    qfs=(QNX6_FS_INFO *)fs;
+    qfs->io=ctx;
+    qfs->inode_tree=inode_tree;
     fs->img_info = img;
     fs->offset = offset;
     fs->ftype = TSK_FS_TYPE_QNX6;
@@ -108,7 +154,7 @@ TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
     fs->block_walk = tsk_fs_nofs_block_walk;
     fs->block_getflags = tsk_fs_nofs_block_getflags;
     fs->inode_walk = tsk_fs_nofs_inode_walk;
-    fs->file_add_meta = tsk_fs_nofs_file_add_meta;
+    fs->file_add_meta = qnx6_file_add_meta;
     fs->istat = tsk_fs_nofs_istat;
     fs->get_default_attr_type = tsk_fs_nofs_get_default_attr_type;
     fs->load_attrs = tsk_fs_nofs_make_data_run;
