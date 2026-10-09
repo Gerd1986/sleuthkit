@@ -17,6 +17,12 @@ int tsk_qnx6_read_inode(const TSK_QNX6_PROBE_INFO *sb,
                         const TSK_QNX6_ROOT *inode_tree, uint32_t inode_number,
                         TSK_QNX6_READ_BLOCK read_block, void *read_context,
                         TSK_QNX6_INODE *out);
+/* Reads up to capacity bytes at offset; holes are zero-filled. Returns 1 on success. */
+int tsk_qnx6_read_file(const TSK_QNX6_PROBE_INFO *sb,
+                       const TSK_QNX6_INODE *inode, uint64_t offset,
+                       uint8_t *destination, size_t capacity,
+                       TSK_QNX6_READ_BLOCK read_block, void *read_context,
+                       size_t *bytes_read);
 int tsk_qnx6_walk_directory(const TSK_QNX6_PROBE_INFO *sb,
                             const TSK_QNX6_INODE *directory,
                             TSK_QNX6_READ_BLOCK read_block, void *read_context,
