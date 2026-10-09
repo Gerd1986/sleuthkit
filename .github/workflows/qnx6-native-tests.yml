@@ -35,9 +35,9 @@ jobs:
           call "%ProgramFiles%\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /W4 /I tsk\fs tests\qnx6_probe_smoke.c tsk\fs\qnx6_probe.c /Fe:qnx6_probe_test.exe
           qnx6_probe_test.exe
-          cl /nologo /W4 /I tsk\fs tests\qnx6_file_smoke.c tsk\fs\\qnx6_file.c tsk\fs\\qnx6_map.c /Fe:qnx6_file_test.exe
+          cl /nologo /W4 /I tsk\fs tests\qnx6_file_smoke.c tsk\fs\qnx6_file.c tsk\fs\qnx6_map.c /Fe:qnx6_file_test.exe
           qnx6_file_test.exe
-          cl /nologo /W4 /I tsk\fs tests\qnx6_inode_smoke.c tsk\fs\\qnx6_inode.c tsk\fs\\qnx6_map.c /Fe:qnx6_inode_test.exe
+          cl /nologo /W4 /I tsk\fs tests\qnx6_inode_smoke.c tsk\fs\qnx6_inode.c tsk\fs\qnx6_map.c /Fe:qnx6_inode_test.exe
           qnx6_inode_test.exe
           cl /nologo /W4 /I tsk\fs tests\qnx6_bitmap_smoke.c tsk\fs\qnx6_bitmap.c tsk\fs\qnx6_map.c /Fe:qnx6_bitmap_test.exe
           qnx6_bitmap_test.exe
