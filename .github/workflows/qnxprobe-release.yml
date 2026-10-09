@@ -55,24 +55,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
-      - name: Build native release
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Build native Windows x64 and JNI
         shell: pwsh
         run: |
-          $solution = Get-ChildItem win32 -Filter *.sln | Select-Object -First 1
-          if (-not $solution) { throw "No Visual Studio solution in win32" }
-          msbuild $solution.FullName /m /p:Configuration=Release /p:Platform=x64
-      - name: Package Windows executables
+          $env:TSK_HOME = (Get-Location).Path
+          $env:INCLUDE = "$env:INCLUDE;$env:JAVA_HOME\\include;$env:JAVA_HOME\\include\\win32"
+          python win32/updateAndBuildAll.py -m -x
+      - name: Package Windows executables and JNI
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force release/windows-x64 | Out-Null
-          Get-ChildItem win32/x64/Release -File | Where-Object { $_.Extension -in '.exe','.dll' } | Copy-Item -Destination release/windows-x64
-          if (-not (Get-ChildItem release/windows-x64 -Filter *.exe)) { throw "No executables produced" }
-          $jni = Get-ChildItem -Path . -Recurse -File -Filter '*sleuthkit*jni*.dll' | Where-Object { $_.FullName -notmatch '[\\/]release[\\/]' }
-          if (-not $jni) { $jni = Get-ChildItem -Path . -Recurse -File -Filter '*jni*.dll' | Where-Object { $_.FullName -notmatch '[\\/]release[\\/]' } }
-          if (-not $jni) { throw 'JNI DLL missing: Windows build is not a complete Autopsy-compatible release' }
-          $jni | Copy-Item -Destination release/windows-x64 -Force
-          Write-Host 'JNI DLLs:' ($jni.Name -join ', ')
-          Compress-Archive release/windows-x64/* sleuthkit-windows-x64.zip
+          $ErrorActionPreference = 'Stop'
+          $out = 'release/windows-x64'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $bins = @(Get-ChildItem win32 -Recurse -File | Where-Object {
+            $_.FullName -match '[\\/](Release_NoLibs|Release)[\\/]' -and
+            $_.Extension -in '.exe','.dll'
+          })
+          $exes = @($bins | Where-Object Extension -eq '.exe')
+          $jni = @($bins | Where-Object Name -eq 'libtsk_jni.dll')
+          if ($exes.Count -eq 0) { throw 'No native Windows executables produced' }
+          if ($jni.Count -eq 0) { throw 'libtsk_jni.dll missing from native build' }
+          $exes | Copy-Item -Destination $out -Force
+          $jni | Select-Object -First 1 | Copy-Item -Destination $out -Force
+          Compress-Archive -Path "$out/*" -DestinationPath sleuthkit-windows-x64.zip -Force
       - uses: actions/upload-artifact@v4
         with:
           name: windows
