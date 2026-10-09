@@ -47,6 +47,7 @@ static FS_TYPES fs_type_table[] = {
     {"hfs", TSK_FS_TYPE_HFS_DETECT, "HFS+ (Auto Detection)"},
 #endif
     {"yaffs2", TSK_FS_TYPE_YAFFS2, "YAFFS2"},
+    {"qnx6", TSK_FS_TYPE_QNX6, "QNX6 (experimental: metadata not yet available)"},
     {"apfs", TSK_FS_TYPE_APFS, "APFS"},
 	{"logical", TSK_FS_TYPE_LOGICAL, "Logical Directory"},
     {"ufs", TSK_FS_TYPE_FFS_DETECT, "UFS (Auto Detection)"},
