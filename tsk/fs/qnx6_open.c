@@ -72,6 +72,61 @@ static uint8_t qnx6_file_add_meta(TSK_FS_INFO *fs, TSK_FS_FILE *file,
     return 0;
 }
 
+typedef struct {
+    TSK_FS_DIR *dir;
+    TSK_FS_INFO *fs;
+} QNX6_DIRENT_CONTEXT;
+
+static int qnx6_add_dirent(void *opaque, uint32_t inum,
+                           const char *name, size_t length) {
+    QNX6_DIRENT_CONTEXT *ctx=(QNX6_DIRENT_CONTEXT *)opaque;
+    TSK_FS_NAME *entry;
+    int result;
+    if (!ctx || !name || !length || length>27) return 0;
+    entry=tsk_fs_name_alloc(length+1,0);
+    if (!entry) return 0;
+    memcpy(entry->name,name,length);
+    entry->name[length]=0;
+    entry->meta_addr=inum;
+    entry->flags=TSK_FS_NAME_FLAG_ALLOC;
+    entry->type=TSK_FS_NAME_TYPE_UNDEF;
+    result=tsk_fs_dir_add(ctx->dir,entry);
+    tsk_fs_name_free(entry);
+    return result==0;
+}
+
+static TSK_RETVAL_ENUM qnx6_dir_open_meta(TSK_FS_INFO *fs,
+                    TSK_FS_DIR **out, TSK_INUM_T inum, int depth) {
+    QNX6_FS_INFO *qfs=(QNX6_FS_INFO *)fs;
+    TSK_QNX6_INODE inode;
+    QNX6_DIRENT_CONTEXT ctx;
+    TSK_FS_DIR *dir;
+    (void)depth;
+    if (!fs || !out || inum<fs->first_inum || inum>fs->last_inum ||
+        !tsk_qnx6_read_inode(&qfs->io.probe,&qfs->inode_tree,(uint32_t)inum,
+                            qnx6_read_block,&qfs->io,&inode) ||
+        (inode.mode & 0170000)!=0040000) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_INODE_NUM);
+        tsk_error_set_errstr("qnx6_dir_open_meta: invalid directory inode");
+        return TSK_ERR;
+    }
+    dir=tsk_fs_dir_alloc(fs,inum,16);
+    if (!dir) return TSK_ERR;
+    ctx.dir=dir;
+    ctx.fs=fs;
+    if (!tsk_qnx6_walk_directory(&qfs->io.probe,&inode,qnx6_read_block,
+                                 &qfs->io,qnx6_add_dirent,&ctx)) {
+        tsk_fs_dir_close(dir);
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_READ);
+        tsk_error_set_errstr("qnx6_dir_open_meta: unreadable directory");
+        return TSK_ERR;
+    }
+    *out=dir;
+    return TSK_OK;
+}
+
 static uint8_t qnx6_fsstat(TSK_FS_INFO *fs, FILE *out) {
     if (!fs || !out) return 1;
     tsk_fprintf(out, "FILE SYSTEM INFORMATION\\n");
@@ -158,7 +213,7 @@ TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
     fs->istat = tsk_fs_nofs_istat;
     fs->get_default_attr_type = tsk_fs_nofs_get_default_attr_type;
     fs->load_attrs = tsk_fs_nofs_make_data_run;
-    fs->dir_open_meta = tsk_fs_nofs_dir_open_meta;
+    fs->dir_open_meta = qnx6_dir_open_meta;
     fs->name_cmp = tsk_fs_nofs_name_cmp;
     fs->jblk_walk = tsk_fs_nofs_jblk_walk;
     fs->jentry_walk = tsk_fs_nofs_jentry_walk;
