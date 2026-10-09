@@ -36,6 +36,8 @@ typedef struct {
     QNX6_READ_CONTEXT io;
     TSK_QNX6_ROOT inode_tree;
     TSK_QNX6_ROOT bitmap_tree;
+    int free_bit;
+    uint64_t data_base;
 } QNX6_FS_INFO;
 
 static uint8_t qnx6_file_add_meta(TSK_FS_INFO *fs, TSK_FS_FILE *file,
@@ -183,40 +185,78 @@ error:
     return 1;
 }
 
-/* Block classification is deliberately conservative until bitmap polarity
- * and the data-block origin have been validated against a reference image.
- * Never advertise unknown bytes as unallocated evidence. */
+/* Data-block addresses are physical filesystem-relative block numbers.
+ * Bitmap indices are relative to the data region, not the boot area. */
 static TSK_FS_BLOCK_FLAG_ENUM qnx6_block_getflags(TSK_FS_INFO *fs,
                                                     TSK_DADDR_T addr) {
-    if (!fs || addr<fs->first_block || addr>fs->last_block) {
+    QNX6_FS_INFO *qfs=(QNX6_FS_INFO *)fs;
+    int bit;
+    if (!fs || addr<qfs->data_base ||
+        (uint64_t)addr-qfs->data_base>=qfs->io.probe.block_count) {
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_BLK_NUM);
-        tsk_error_set_errstr("qnx6_block_getflags: block outside filesystem");
+        tsk_error_set_errstr("qnx6_block_getflags: block outside QNX6 data region");
         return TSK_FS_BLOCK_FLAG_UNUSED;
     }
-    tsk_error_reset();
-    tsk_error_set_errno(TSK_ERR_FS_UNSUPFUNC);
-    tsk_error_set_errstr("qnx6_block_getflags: bitmap allocation polarity unverified");
-    return TSK_FS_BLOCK_FLAG_UNUSED;
+    if (qfs->free_bit<0 ||
+        !tsk_qnx6_bitmap_raw_bit(&qfs->io.probe,&qfs->bitmap_tree,
+                                  (uint64_t)addr-qfs->data_base,
+                                  qnx6_read_block,&qfs->io,&bit)) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_READ);
+        tsk_error_set_errstr("qnx6_block_getflags: allocation bitmap unavailable");
+        return TSK_FS_BLOCK_FLAG_UNUSED;
+    }
+    return (TSK_FS_BLOCK_FLAG_ENUM)(
+        (bit==qfs->free_bit ? TSK_FS_BLOCK_FLAG_UNALLOC :
+                              TSK_FS_BLOCK_FLAG_ALLOC) |
+        TSK_FS_BLOCK_FLAG_CONT);
 }
 
 static uint8_t qnx6_block_walk(TSK_FS_INFO *fs, TSK_DADDR_T start,
                                 TSK_DADDR_T end,
                                 TSK_FS_BLOCK_WALK_FLAG_ENUM flags,
                                 TSK_FS_BLOCK_WALK_CB callback, void *opaque) {
-    (void)flags;
-    (void)callback;
-    (void)opaque;
-    if (!fs || start<fs->first_block || end>fs->last_block || start>end) {
+    QNX6_FS_INFO *qfs=(QNX6_FS_INFO *)fs;
+    TSK_FS_BLOCK *block;
+    TSK_DADDR_T addr;
+    if (!fs || !callback || start<qfs->data_base ||
+        end>fs->last_block || start>end || qfs->free_bit<0) {
         tsk_error_reset();
-        tsk_error_set_errno(TSK_ERR_FS_BLK_NUM);
-        tsk_error_set_errstr("qnx6_block_walk: invalid block range");
+        tsk_error_set_errno(TSK_ERR_FS_ARG);
+        tsk_error_set_errstr("qnx6_block_walk: invalid range or unvalidated bitmap");
         return 1;
     }
-    tsk_error_reset();
-    tsk_error_set_errno(TSK_ERR_FS_UNSUPFUNC);
-    tsk_error_set_errstr("qnx6_block_walk: allocation map requires reference validation");
-    return 1;
+    block=tsk_fs_block_alloc(fs);
+    if (!block) return 1;
+    for(addr=start;;addr++) {
+        TSK_FS_BLOCK_FLAG_ENUM status=qnx6_block_getflags(fs,addr);
+        TSK_WALK_RET_ENUM result;
+        if (status==TSK_FS_BLOCK_FLAG_UNUSED) {
+            tsk_fs_block_free(block);
+            return 1;
+        }
+        if (((status & TSK_FS_BLOCK_FLAG_ALLOC) &&
+             (flags & TSK_FS_BLOCK_WALK_FLAG_ALLOC)) ||
+            ((status & TSK_FS_BLOCK_FLAG_UNALLOC) &&
+             (flags & TSK_FS_BLOCK_WALK_FLAG_UNALLOC))) {
+            if (flags & TSK_FS_BLOCK_WALK_FLAG_AONLY)
+                status=(TSK_FS_BLOCK_FLAG_ENUM)(status|TSK_FS_BLOCK_FLAG_AONLY);
+            if (!tsk_fs_block_get_flag(fs,block,addr,status)) {
+                tsk_fs_block_free(block);
+                return 1;
+            }
+            result=callback(block,opaque);
+            if (result==TSK_WALK_ERROR) {
+                tsk_fs_block_free(block);
+                return 1;
+            }
+            if (result==TSK_WALK_STOP) break;
+        }
+        if (addr==end) break;
+    }
+    tsk_fs_block_free(block);
+    return 0;
 }
 
 static uint8_t qnx6_fsstat(TSK_FS_INFO *fs, FILE *out) {
@@ -285,15 +325,19 @@ TSK_FS_INFO *qnx6_open(TSK_IMG_INFO *img, TSK_OFF_T offset,
     qfs->io=ctx;
     qfs->inode_tree=inode_tree;
     qfs->bitmap_tree=bitmap_tree;
+    qfs->data_base=(0x2000U/probe.block_size)+(0x1000U/probe.block_size);
+    qfs->free_bit=-1;
+    if (!tsk_qnx6_bitmap_free_bit(&probe,&bitmap_tree,qnx6_read_block,
+                                  &qfs->io,&qfs->free_bit)) qfs->free_bit=-1;
     fs->img_info = img;
     fs->offset = offset;
     fs->ftype = TSK_FS_TYPE_QNX6;
     fs->duname = "Block";
     fs->tag = TSK_FS_INFO_TAG;
     fs->block_size = probe.block_size;
-    fs->block_count = probe.block_count;
+    fs->block_count = probe.block_count + qfs->data_base;
     fs->first_block = 0;
-    fs->last_block = fs->last_block_act = probe.block_count - 1;
+    fs->last_block = fs->last_block_act = fs->block_count - 1;
     fs->dev_bsize = img->sector_size;
     fs->root_inum = 1;
     fs->first_inum = 1;
