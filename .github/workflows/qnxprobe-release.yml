@@ -34,6 +34,8 @@ jobs:
           find _install/lib -maxdepth 1 -type f -name '*.so*' -exec cp -L {} release/linux-x64/lib/ \;
           find bindings/java -type f -name '*.jar' ! -name '*sources*' ! -name '*javadoc*' -exec cp {} release/java/ \;
           test -n "$(find release/java -name '*.jar' -print -quit)"
+          echo 'Java artifacts:'
+          find release/java -name '*.jar' -print
           test -n "$(find release/linux-x64/bin -type f -print -quit)"
           tar -czf sleuthkit-linux-x64.tar.gz -C release linux-x64
           (cd release/java && zip -r ../../sleuthkit-java.zip .)
@@ -60,6 +62,11 @@ jobs:
           New-Item -ItemType Directory -Force release/windows-x64 | Out-Null
           Get-ChildItem win32/x64/Release -File | Where-Object { $_.Extension -in '.exe','.dll' } | Copy-Item -Destination release/windows-x64
           if (-not (Get-ChildItem release/windows-x64 -Filter *.exe)) { throw "No executables produced" }
+          $jni = Get-ChildItem -Path . -Recurse -File -Filter '*sleuthkit*jni*.dll' | Where-Object { $_.FullName -notmatch '[\\/]release[\\/]' }
+          if (-not $jni) { $jni = Get-ChildItem -Path . -Recurse -File -Filter '*jni*.dll' | Where-Object { $_.FullName -notmatch '[\\/]release[\\/]' } }
+          if (-not $jni) { throw 'JNI DLL missing: Windows build is not a complete Autopsy-compatible release' }
+          $jni | Copy-Item -Destination release/windows-x64 -Force
+          Write-Host 'JNI DLLs:' ($jni.Name -join ', ')
           Compress-Archive release/windows-x64/* sleuthkit-windows-x64.zip
       - uses: actions/upload-artifact@v4
         with:
