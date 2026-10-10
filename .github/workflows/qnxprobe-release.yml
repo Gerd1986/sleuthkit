@@ -263,3 +263,5 @@ jobs:
           prerelease: true
           files: artifacts/*
           generate_release_notes: true
+
+# Retry release pipeline after workflow registration
