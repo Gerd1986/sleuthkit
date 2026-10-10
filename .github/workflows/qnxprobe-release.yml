@@ -3,13 +3,6 @@ on:
   push:
     branches:
       - develop-4.1x
-    paths:
-      - '.github/workflows/qnxprobe-release.yml'
-      - 'tsk/**'
-      - 'bindings/**'
-      - 'win32/**'
-    tags:
-      - 'v*-qnxprobe.*'
   workflow_dispatch:
     inputs:
       release_tag:
