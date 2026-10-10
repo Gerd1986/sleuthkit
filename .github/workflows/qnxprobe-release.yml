@@ -1,6 +1,13 @@
 name: QNXProbe release builds
 on:
   push:
+    branches:
+      - develop-4.1x
+    paths:
+      - '.github/workflows/qnxprobe-release.yml'
+      - 'tsk/**'
+      - 'bindings/**'
+      - 'win32/**'
     tags:
       - 'v*-qnxprobe.*'
   workflow_dispatch:
@@ -71,6 +78,16 @@ jobs:
           if (-not (Test-Path "$env:JAVA_HOME/include/jni.h")) { throw "Missing JDK JNI header" }
           Write-Host "JNI header found: $env:JAVA_HOME/include/jni.h"
           python win32/updateAndBuildAll.py -m
+      - name: Build Windows JNI JAR
+        shell: pwsh
+        working-directory: bindings/java
+        run: |
+          ant clean
+          if ($LASTEXITCODE -ne 0) { throw 'Ant clean failed' }
+          ant dist
+          if ($LASTEXITCODE -ne 0) { throw 'Ant dist failed' }
+          $entries = & jar tf dist/sleuthkit-4.15.0.jar
+          if ($LASTEXITCODE -ne 0 -or -not ($entries -contains 'NATIVELIBS/amd64/win/libtsk_jni.dll')) { throw 'Windows JNI missing from JAR' }
       - name: Package and smoke-test Windows executables and JNI
         shell: pwsh
         run: |
@@ -118,13 +135,14 @@ jobs:
             if ($proc.ExitCode -in @(-1073741515,-1073741701)) { throw "Windows loader failure for $($exe.Name): $($proc.ExitCode)" }
             Write-Host "$($exe.Name): exit $($proc.ExitCode)"
           }
+          Copy-Item bindings/java/dist/sleuthkit-4.15.0.jar $out/ -Force
           Compress-Archive -Path "$out/*" -DestinationPath sleuthkit-windows-x64.zip -Force
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: sleuthkit-windows-x64.zip
   publish:
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs: [linux, windows]
     runs-on: ubuntu-24.04
     steps:
@@ -142,7 +160,7 @@ jobs:
           RUN_NUMBER: ${{ github.run_number }}
         run: |
           set -euo pipefail
-          if [[ "$EVENT_NAME" == "push" ]]; then
+          if [[ "$EVENT_NAME" == "push" && "$REF_NAME" == v*-qnxprobe.* ]]; then
             tag="$REF_NAME"
           elif [[ -n "$REQUESTED_TAG" ]]; then
             tag="$REQUESTED_TAG"
